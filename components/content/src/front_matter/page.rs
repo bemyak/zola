@@ -5,13 +5,17 @@ use tera::{Map, Value};
 use time::format_description::well_known::Rfc3339;
 use time::macros::{format_description, time};
 use time::{Date, OffsetDateTime, PrimitiveDateTime};
+use utils::types::InsertAnchor;
 
 use super::datetime::from_unknown_datetime;
 use errors::{Result, bail};
 
 use super::extra::{default_extra, deserialize_extra};
 
+use crate::SortBy;
 use crate::front_matter::split::RawFrontMatter;
+
+pub(crate) const DEFAULT_PAGINATE_PATH: &str = "page";
 
 /// The front matter of every page
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -78,6 +82,36 @@ pub struct PageFrontMatter {
     /// Any extra parameter present in the front matter
     #[serde(default = "default_extra", deserialize_with = "deserialize_extra")]
     pub extra: Value,
+    /// Whether to sort by "date", "order", "weight" or "none". Defaults to `none`.
+    #[serde(skip_serializing)]
+    pub sort_by: SortBy,
+    /// How many pages to be displayed per paginated page. No pagination will happen if this isn't set
+    #[serde(skip_serializing)]
+    pub paginate_by: Option<usize>,
+    /// Whether to reverse the order of the pages before segmenting into pagers
+    #[serde(skip_serializing)]
+    pub paginate_reversed: bool,
+    /// Path to be used by pagination: the page number will be appended after it. Defaults to `page`.
+    #[serde(skip_serializing)]
+    pub paginate_path: String,
+    /// Whether to insert a link for each header like the ones you can see in this site if you hover one
+    /// The default template can be overridden by creating a `anchor-link.html` in the `templates` directory
+    pub insert_anchor_links: Option<InsertAnchor>,
+    /// Whether to redirect when landing on that section. Defaults to `None`.
+    /// Useful for the same reason as `render` but when you don't want a 404 when
+    /// landing on the root section page
+    #[serde(skip_serializing)]
+    pub redirect_to: Option<String>,
+    /// Whether the section should pass its pages on to the parent section. Defaults to `false`.
+    /// Useful when the section shouldn't split up the parent section, like
+    /// sections for each year under a posts section.
+    pub transparent: bool,
+    /// Optional template for all pages in this section (including the pages of children section)
+    #[serde(skip_serializing)]
+    pub page_template: Option<String>,
+    /// Whether to generate a feed for the current section
+    #[serde(skip_serializing)]
+    pub generate_feeds: bool,
 }
 
 /// Parse a string for a datetime coming from one of the supported TOML format
@@ -146,6 +180,21 @@ impl PageFrontMatter {
     pub fn weight(&self) -> usize {
         self.weight.unwrap()
     }
+
+    /// Only applies to section, whether it is paginated or not.
+    pub fn is_paginated(&self) -> bool {
+        self.paginate_by.is_some_and(|v| v > 0)
+    }
+
+    /// Only applies to sections. Whether a change from `old_meta` requires re-rendering the pages
+    /// of that section.
+    pub fn needs_pages_render(&self, old_meta: &PageFrontMatter) -> bool {
+        self.page_template != old_meta.page_template
+            || self.sort_by != old_meta.sort_by
+            || self.insert_anchor_links != old_meta.insert_anchor_links
+            || self.transparent != old_meta.transparent
+            || self.hidden != old_meta.hidden
+    }
 }
 
 impl Default for PageFrontMatter {
@@ -172,6 +221,15 @@ impl Default for PageFrontMatter {
             template: None,
             hidden: None,
             extra: Value::from(Map::new()),
+            sort_by: SortBy::None,
+            paginate_by: None,
+            paginate_reversed: false,
+            paginate_path: DEFAULT_PAGINATE_PATH.to_string(),
+            insert_anchor_links: None,
+            redirect_to: None,
+            transparent: false,
+            page_template: None,
+            generate_feeds: false,
         }
     }
 }

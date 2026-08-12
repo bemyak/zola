@@ -46,6 +46,14 @@ pub fn test_site_path(name: &str) -> PathBuf {
 
 /// We return the tmpdir otherwise it would get out of scope and be deleted
 /// The tests can ignore it if they dont need it by prefixing it with a `_`
+pub fn num_pages(site: &Site) -> usize {
+    site.library.pages.values().filter(|n| !n.is_section).count()
+}
+
+pub fn num_sections(site: &Site) -> usize {
+    site.library.pages.values().filter(|n| n.is_section).count()
+}
+
 pub fn build_site(name: &str) -> (Site, TempDir, PathBuf) {
     let path = test_site_path(name);
     let config_file = path.join("config.toml");
@@ -188,18 +196,14 @@ pub struct Translations {
 
 impl Translations {
     pub fn for_path(site: &Site, path: &str) -> Translations {
-        // WORKAROUND because site.content_path is private
-        let unified_path = if let Some(page) =
-            site.library.pages.get(&site.base_path.join("content").join(path))
-        {
-            page.file.canonical.clone()
-        } else if let Some(section) =
-            site.library.sections.get(&site.base_path.join("content").join(path))
-        {
-            section.file.canonical.clone()
-        } else {
-            panic!("No such page or section: {}", path);
-        };
+        let unified_path = site
+            .library
+            .pages
+            .get(&site.base_path.join("content").join(path))
+            .unwrap_or_else(|| panic!("No such page or section: {}", path))
+            .file
+            .canonical
+            .clone();
 
         let translations = site.library.translations.get(&unified_path);
         if translations.is_none() {
@@ -214,23 +218,11 @@ impl Translations {
             .unwrap()
             .iter()
             .map(|key| {
-                // Are we looking for a section? (no file extension here)
-                if unified_path.ends_with("_index") {
-                    //library.get_section_by_key(*key).file.relative.to_string()
-                    let section = &site.library.sections[key];
-                    Translation {
-                        lang: section.lang.clone(),
-                        permalink: section.permalink.clone(),
-                        path: section.file.path.to_str().unwrap().to_string(),
-                    }
-                } else {
-                    let page = &site.library.pages[key];
-                    Translation {
-                        lang: page.lang.clone(),
-                        permalink: page.permalink.clone(),
-                        path: page.file.path.to_str().unwrap().to_string(),
-                    }
-                    //library.get_page_by_key(*key).file.relative.to_string()
+                let node = &site.library.pages[key];
+                Translation {
+                    lang: node.lang.clone(),
+                    permalink: node.permalink.clone(),
+                    path: node.file.path.to_str().unwrap().to_string(),
                 }
             })
             .collect();

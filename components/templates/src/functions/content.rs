@@ -44,6 +44,7 @@ impl Function<TeraResult<Value>> for GetPage {
                 .cache
                 .pages
                 .get(&full_path)
+                .filter(|c| !c.is_section)
                 .ok_or_else(|| Error::message(format!("Page `{}` not found.", path)))?;
 
             let file_path = self
@@ -113,13 +114,14 @@ impl Function<TeraResult<Value>> for GetSection {
         let res = (|| {
             let cached = self
                 .cache
-                .sections
+                .pages
                 .get(&full_path)
+                .filter(|c| c.is_section)
                 .ok_or_else(|| Error::message(format!("Section `{}` not found.", path)))?;
 
             let file_path = self
                 .cache
-                .sections_by_canonical
+                .pages_by_canonical
                 .get(&cached.canonical)
                 .and_then(|by_lang| by_lang.get(&lang))
                 .ok_or_else(|| {
@@ -127,7 +129,7 @@ impl Function<TeraResult<Value>> for GetSection {
                 })?;
 
             self.cache
-                .sections
+                .pages
                 .get(file_path)
                 .map(|c| c.value.clone())
                 .ok_or_else(|| Error::message(format!("Section `{}` not found.", path)))
@@ -150,7 +152,7 @@ impl Function<TeraResult<Value>> for GetSection {
 mod tests {
     use super::*;
     use config::Config;
-    use content::{FileInfo, Library, Page, Section, SortBy};
+    use content::{FileInfo, Library, Page, SortBy};
     use render::RenderCache;
     use std::path::Path;
     use tera::{Context, Kwargs, Tera};
@@ -191,7 +193,7 @@ mod tests {
             ("Des Romans", "content/novels.fr.md", "fr"),
         ];
         for (t, f, l) in pages.clone() {
-            library.insert_page(create_page(t, f, l));
+            library.insert(create_page(t, f, l));
         }
         let tera = Tera::default();
         let mut cache = RenderCache::new(&config);
@@ -254,14 +256,14 @@ mod tests {
         assert!(res.unwrap() == Value::none());
     }
 
-    fn create_section(title: &str, file_path: &str, lang: &str) -> Section {
-        let mut section = Section { lang: lang.to_owned(), ..Section::default() };
+    fn create_section(title: &str, file_path: &str, lang: &str) -> Page {
+        let mut section = Page { lang: lang.to_owned(), is_section: true, ..Default::default() };
         section.file = FileInfo::new_section(
             Path::new(format!("/test/base/path/{}", file_path).as_str()),
             &PathBuf::new(),
         );
         section.meta.title = Some(title.to_string());
-        section.meta.weight = 1;
+        section.meta.weight = Some(1);
         section.meta.transparent = false;
         section.meta.sort_by = SortBy::None;
         section.meta.page_template = Some("new_page.html".to_owned());
@@ -287,7 +289,7 @@ mod tests {
             ("Des Romans", "content/novels/_index.fr.md", "fr"),
         ];
         for (t, f, l) in sections.clone() {
-            library.insert_section(create_section(t, f, l));
+            library.insert(create_section(t, f, l));
         }
         let tera = Tera::default();
         let mut cache = RenderCache::new(&config);

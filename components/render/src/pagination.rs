@@ -1,12 +1,12 @@
 use crate::RenderCache;
-use content::{Library, Section, Taxonomy, TaxonomyTerm};
+use content::{Library, Page, Taxonomy, TaxonomyTerm};
 use serde::Serialize;
 use std::path::PathBuf;
 use tera::{Map, Tera, Value};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PaginationRoot<'a> {
-    Section(&'a Section),
+    Section(&'a Page),
     Taxonomy(&'a Taxonomy, &'a TaxonomyTerm),
 }
 
@@ -55,7 +55,7 @@ pub struct Paginator<'a> {
 impl<'a> Paginator<'a> {
     /// Create a new paginator from a section
     /// It will always at least create one pager (the first) even if there are not enough pages to paginate
-    pub fn from_section(section: &'a Section, library: &'a Library) -> Paginator<'a> {
+    pub fn from_section(section: &'a Page, library: &'a Library) -> Paginator<'a> {
         let paginate_by = section.meta.paginate_by.unwrap();
         let mut paginator = Paginator {
             all_pages: &section.pages,
@@ -212,17 +212,17 @@ impl<'a> Paginator<'a> {
 mod tests {
     use super::*;
     use config::TaxonomyConfig;
-    use content::{Page, SectionFrontMatter};
+    use content::{Page, PageFrontMatter};
 
-    fn create_section(is_index: bool, paginate_reversed: bool) -> Section {
-        let f = SectionFrontMatter {
+    fn create_section(is_index: bool, paginate_reversed: bool) -> Page {
+        let f = PageFrontMatter {
             paginate_by: Some(2),
             paginate_path: "page".to_string(),
             paginate_reversed,
             ..Default::default()
         };
 
-        let mut s = Section::new("content/_index.md", f, &PathBuf::new());
+        let mut s = Page::new_section("content/_index.md", f, &PathBuf::new());
         if !is_index {
             s.path = "/posts/".to_string();
             s.permalink = "https://vincent.is/posts/".to_string();
@@ -240,19 +240,20 @@ mod tests {
         is_index: bool,
         num_pages: usize,
         paginate_reversed: bool,
-    ) -> (Section, Library) {
+    ) -> (Page, Library) {
         let mut library = Library::default();
         for i in 1..=num_pages {
             let mut page = Page::default();
             page.meta.title = Some(i.to_string());
             page.file.path = PathBuf::from(&format!("{}.md", i));
-            library.insert_page(page);
+            library.insert(page);
         }
 
         let mut section = create_section(is_index, paginate_reversed);
-        section.pages = library.pages.keys().cloned().collect();
+        section.pages =
+            library.pages.keys().filter(|k| !library.pages[*k].is_section).cloned().collect();
         section.pages.sort();
-        library.insert_section(section.clone());
+        library.insert(section.clone());
 
         (section, library)
     }
@@ -391,7 +392,12 @@ mod tests {
             slug: "something".to_string(),
             path: "/some-tags/something/".to_string(),
             permalink: "https://vincent.is/some-tags/something/".to_string(),
-            pages: library.pages.keys().cloned().collect(),
+            pages: library
+                .pages
+                .keys()
+                .filter(|k| !library.pages[*k].is_section)
+                .cloned()
+                .collect(),
         };
         let taxonomy = Taxonomy {
             kind: taxonomy_def,
@@ -455,13 +461,14 @@ mod tests {
             if i == 2 || i == 4 {
                 page.meta.render = false;
             }
-            library.insert_page(page);
+            library.insert(page);
         }
 
         let mut section = create_section(false, false);
-        section.pages = library.pages.keys().cloned().collect();
+        section.pages =
+            library.pages.keys().filter(|k| !library.pages[*k].is_section).cloned().collect();
         section.pages.sort();
-        library.insert_section(section.clone());
+        library.insert(section.clone());
 
         let paginator = Paginator::from_section(&section, &library);
 
@@ -488,12 +495,13 @@ mod tests {
             page.meta.title = Some(i.to_string());
             page.file.path = PathBuf::from(&format!("{}.md", i));
             page.meta.render = false;
-            library.insert_page(page);
+            library.insert(page);
         }
 
         let mut section = create_section(false, false);
-        section.pages = library.pages.keys().cloned().collect();
-        library.insert_section(section.clone());
+        section.pages =
+            library.pages.keys().filter(|k| !library.pages[*k].is_section).cloned().collect();
+        library.insert(section.clone());
 
         let paginator = Paginator::from_section(&section, &library);
 

@@ -20,7 +20,7 @@ use walkdir::{DirEntry, WalkDir};
 
 use crate::queue::Queue;
 use config::{Config, IndexFormat, get_config};
-use content::{Library, Page, Section, Taxonomy};
+use content::{Library, Page, Taxonomy};
 use errors::{Result, anyhow, bail};
 use relative_path::RelativePathBuf;
 use render::{RenderCache, Renderer};
@@ -263,7 +263,7 @@ impl Site {
 
                 for index_file in index_files {
                     let section =
-                        Section::from_file(index_file.path(), &self.config, &self.base_path)?;
+                        Page::from_file_section(index_file.path(), &self.config, &self.base_path)?;
                     sections.insert(section.components.join("/"));
 
                     // if the section is drafted we can skip the entire dir
@@ -399,7 +399,7 @@ impl Site {
     pub fn create_default_index_sections(&mut self) -> Result<()> {
         let mut missing_sections = Vec::new();
         for (index_path, lang) in self.index_section_paths() {
-            if let Some(index_section) = self.library.sections.get(&index_path)
+            if let Some(index_section) = self.library.pages.get(&index_path)
                 && self.config.build_search_index
                 && !index_section.meta.in_search_index
             {
@@ -410,7 +410,7 @@ impl Site {
                 )
             }
             // Not in else because of borrow checker
-            if !self.library.sections.contains_key(&index_path) {
+            if !self.library.pages.contains_key(&index_path) {
                 missing_sections.push((index_path, lang.map(|l| l.to_string())));
             }
         }
@@ -421,8 +421,8 @@ impl Site {
 
         let library = Arc::make_mut(&mut self.library);
         for (index_path, lang) in missing_sections {
-            if !library.sections.contains_key(&index_path) {
-                let mut index_section = Section::default();
+            if !library.pages.contains_key(&index_path) {
+                let mut index_section = Page { is_section: true, ..Default::default() };
                 index_section.file.parent = self.content_path.clone();
                 index_section.file.filename =
                     index_path.file_name().unwrap().to_string_lossy().to_string();
@@ -446,7 +446,7 @@ impl Site {
                     &self.config.default_language,
                     &self.config.other_languages_codes(),
                 )?;
-                library.insert_section(index_section);
+                library.insert(index_section);
             }
         }
 
@@ -465,7 +465,7 @@ impl Site {
 
         // This is needed in the first place because of silly borrow checker
         let mut pages_insert_anchors = HashMap::new();
-        for (_, p) in &self.library.pages {
+        for (_, p) in self.library.pages.iter().filter(|(_, p)| !p.is_section) {
             pages_insert_anchors.insert(
                 p.file.path.clone(),
                 self.find_parent_section_insert_anchor(&p.file.parent.clone(), &p.lang),
@@ -480,6 +480,7 @@ impl Site {
         library
             .pages
             .values_mut()
+            .filter(|p| !p.is_section)
             .collect::<Vec<_>>()
             .par_iter_mut()
             .map(|page| {
@@ -497,8 +498,9 @@ impl Site {
             .collect::<Result<()>>()?;
 
         library
-            .sections
+            .pages
             .values_mut()
+            .filter(|p| p.is_section)
             .collect::<Vec<_>>()
             .par_iter_mut()
             .map(|section| {
@@ -546,7 +548,7 @@ impl Site {
 
         let library = Arc::make_mut(&mut self.library);
         library.pages.remove(&page.file.path);
-        library.insert_page(page);
+        library.insert(page);
 
         Ok(())
     }
@@ -562,7 +564,7 @@ impl Site {
 
     /// Add a section to the site
     /// The `render` parameter is used in the serve command with --fast, when rebuilding a page.
-    pub fn add_section(&mut self, mut section: Section, render_md: bool) -> Result<()> {
+    pub fn add_section(&mut self, mut section: Page, render_md: bool) -> Result<()> {
         self.permalinks.insert(section.file.relative.clone(), section.permalink.clone());
         if render_md {
             md_render::render_section(
@@ -575,8 +577,8 @@ impl Site {
             )?;
         }
         let library = Arc::make_mut(&mut self.library);
-        library.sections.remove(&section.file.path);
-        library.insert_section(section);
+        library.pages.remove(&section.file.path);
+        library.insert(section);
 
         Ok(())
     }
@@ -584,12 +586,12 @@ impl Site {
     /// Adds a section to the site and render it
     /// Only used in `zola serve --fast`
     pub fn add_and_render_section(&mut self, path: &Path) -> Result<()> {
-        let section = Section::from_file(path, &self.config, &self.base_path)?;
-        let old_meta = self.library.sections.get(path).map(|s| s.meta.clone());
+        let section = Page::from_file_section(path, &self.config, &self.base_path)?;
+        let old_meta = self.library.pages.get(path).map(|s| s.meta.clone());
         self.add_section(section, true)?;
         self.populate_sections();
-        let section = self.library.sections.get(path).unwrap();
-        let render_pages = old_meta.map(|m| section.needs_pages_render(&m)).unwrap_or(true);
+        let section = self.library.pages.get(path).unwrap();
+        let render_pages = old_meta.map(|m| section.meta.needs_pages_render(&m)).unwrap_or(true);
         Queue::single_section(self, section, render_pages).process()
     }
 
@@ -606,7 +608,7 @@ impl Site {
             parent_path.join("_index.md")
         };
         self.library
-            .sections
+            .pages
             .get(&parent)
             .and_then(|s| s.meta.insert_anchor_links)
             .unwrap_or(self.config.markdown.insert_anchor_links)

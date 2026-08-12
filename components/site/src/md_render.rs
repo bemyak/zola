@@ -7,7 +7,7 @@ use ahash::AHashMap;
 use tera::Tera;
 
 use config::Config;
-use content::{Page, Section};
+use content::Page;
 use errors::{Context as _, Result};
 use markdown::MarkdownContext;
 use render::Renderer;
@@ -66,7 +66,7 @@ pub fn render_page(
 }
 
 pub fn render_section(
-    section: &mut Section,
+    section: &mut Page,
     renderer: Renderer,
     permalinks: &HashMap<String, String>,
     colocated_assets: &AHashMap<String, (String, String)>,

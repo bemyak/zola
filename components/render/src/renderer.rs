@@ -1,8 +1,6 @@
 use config::Config;
 use config::TaxonomyConfig;
-use content::{
-    Library, Page, Section, SerializingPage, SerializingSection, Taxonomy, TaxonomyTerm,
-};
+use content::{Library, Page, SerializingPage, SerializingSection, Taxonomy, TaxonomyTerm};
 use errors::{Context as _, Result};
 use serde::Serialize;
 use tera::{Context, Tera, Value};
@@ -51,13 +49,13 @@ impl<'a> Renderer<'a> {
             .with_context(|| format!("Failed to render page '{}'", page.file.path.display()))
     }
 
-    pub fn render_section(&self, section: &Section) -> Result<String> {
+    pub fn render_section(&self, section: &Page) -> Result<String> {
         let mut context = Context::new();
 
         context.insert_value("config", self.cache.configs.get(&section.lang).unwrap().clone());
         context.insert_value(
             "section",
-            self.cache.sections.get(&section.file.path).unwrap().value.clone(),
+            self.cache.pages.get(&section.file.path).unwrap().value.clone(),
         );
         context.insert("current_url", &section.permalink);
         context.insert("current_path", &section.path);
@@ -136,7 +134,7 @@ impl<'a> Renderer<'a> {
             PaginationRoot::Section(s) => {
                 context.insert_value(
                     "section",
-                    self.cache.sections.get(&s.file.path).unwrap().value.clone(),
+                    self.cache.pages.get(&s.file.path).unwrap().value.clone(),
                 );
                 context.insert("lang", &s.lang);
                 context.insert_value("config", self.cache.configs.get(&s.lang).unwrap().clone());
@@ -225,7 +223,7 @@ impl<'a> Renderer<'a> {
         })
     }
 
-    pub fn render_section_content(&self, content: &str, section: &Section) -> Result<String> {
+    pub fn render_section_content(&self, content: &str, section: &Page) -> Result<String> {
         let mut context = Context::new();
         context.insert("lang", &section.lang);
         context.insert_value("config", self.cache.configs.get(&section.lang).unwrap().clone());

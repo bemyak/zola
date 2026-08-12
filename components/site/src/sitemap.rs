@@ -63,7 +63,7 @@ pub fn find_entries<'a>(
 ) -> Vec<SitemapEntry<'a>> {
     let mut entries = HashSet::new();
 
-    for p in library.pages.values() {
+    for p in library.pages.values().filter(|p| !p.is_section) {
         if !p.meta.render || p.hidden {
             continue;
         }
@@ -76,7 +76,7 @@ pub fn find_entries<'a>(
         entries.insert(entry);
     }
 
-    for s in library.sections.values() {
+    for s in library.pages.values().filter(|p| p.is_section) {
         if s.hidden {
             continue;
         }

@@ -57,7 +57,7 @@ struct IndexItem<'a> {
 /// of a given language.
 fn collect_index_items<'a>(lang: &str, library: &'a Library) -> Vec<IndexItem<'a>> {
     let mut items: Vec<IndexItem> = Vec::new();
-    for (_, section) in &library.sections {
+    for section in library.pages.values().filter(|p| p.is_section) {
         if section.lang != lang {
             continue;
         }

@@ -1,19 +1,18 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tera::{Map, Value};
 
 use super::extra::{default_extra, deserialize_extra};
+use super::page::{DEFAULT_PAGINATE_PATH, PageFrontMatter};
 use errors::Result;
 use utils::types::InsertAnchor;
 
 use crate::SortBy;
 use crate::front_matter::split::RawFrontMatter;
 
-const DEFAULT_PAGINATE_PATH: &str = "page";
-
 /// The front matter of every section
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct SectionFrontMatter {
+pub(crate) struct SectionFrontMatter {
     /// <title> of the page
     pub title: Option<String>,
     /// Description in <meta> that appears when linked, e.g. on twitter
@@ -84,9 +83,29 @@ impl SectionFrontMatter {
         raw.deserialize()
     }
 
-    /// Only applies to section, whether it is paginated or not.
-    pub fn is_paginated(&self) -> bool {
-        self.paginate_by.is_some_and(|v| v > 0)
+    pub(crate) fn into_page_fm(self) -> PageFrontMatter {
+        PageFrontMatter {
+            title: self.title,
+            description: self.description,
+            draft: self.draft,
+            render: self.render,
+            aliases: self.aliases,
+            template: self.template,
+            in_search_index: self.in_search_index,
+            hidden: self.hidden,
+            extra: self.extra,
+            sort_by: self.sort_by,
+            weight: Some(self.weight),
+            paginate_by: self.paginate_by,
+            paginate_reversed: self.paginate_reversed,
+            paginate_path: self.paginate_path,
+            insert_anchor_links: self.insert_anchor_links,
+            redirect_to: self.redirect_to,
+            transparent: self.transparent,
+            page_template: self.page_template,
+            generate_feeds: self.generate_feeds,
+            ..Default::default()
+        }
     }
 }
 

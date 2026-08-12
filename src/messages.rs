@@ -7,22 +7,24 @@ use site::Site;
 
 /// Display in the console the number of pages/sections in the site
 pub fn notify_site_size(site: &Site) {
+    let num_sections = site.library.pages.values().filter(|n| n.is_section).count() - 1; // -1 since we do not count the index as a section there
     log::info!(
         "-> Creating {} pages ({} orphan) and {} sections",
-        site.library.pages.len(),
+        site.library.pages.values().filter(|n| !n.is_section).count(),
         site.library.get_all_orphan_pages().len(),
-        site.library.sections.len() - 1, // -1 since we do not count the index as a section there
+        num_sections,
     );
 }
 
 /// Display in the console only the number of pages/sections in the site
 pub fn check_site_summary(site: &Site) {
     let orphans = site.library.get_all_orphan_pages();
+    let num_sections = site.library.pages.values().filter(|n| n.is_section).count() - 1; // -1 since we do not count the index as a section there
     log::info!(
         "-> Site content: {} pages ({} orphan), {} sections",
-        site.library.pages.len(),
+        site.library.pages.values().filter(|n| !n.is_section).count(),
         orphans.len(),
-        site.library.sections.len() - 1, // -1 since we do not count the index as a section there
+        num_sections,
     );
 
     for orphan in orphans {
@@ -34,8 +36,9 @@ pub fn check_site_summary(site: &Site) {
 pub fn warn_about_ignored_pages(site: &Site) {
     let ignored_pages: Vec<_> = site
         .library
-        .sections
+        .pages
         .values()
+        .filter(|n| n.is_section)
         .flat_map(|s| s.ignored_pages.iter().map(|k| site.library.pages[k].file.path.clone()))
         .collect();
 

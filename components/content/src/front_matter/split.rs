@@ -69,15 +69,17 @@ fn split_content<'c>(file_path: &Path, content: &'c str) -> Result<(RawFrontMatt
 }
 
 /// Split a file between the front matter and its content.
-/// Returns a parsed `SectionFrontMatter` and the rest of the content
+/// Returns a parsed `PageFrontMatter` and the rest of the content
 pub fn split_section_content<'c>(
     file_path: &Path,
     content: &'c str,
-) -> Result<(SectionFrontMatter, &'c str)> {
+) -> Result<(PageFrontMatter, &'c str)> {
     let (front_matter, content) = split_content(file_path, content)?;
-    let meta = SectionFrontMatter::parse(&front_matter).with_context(|| {
-        format!("Error when parsing front matter of section `{}`", file_path.to_string_lossy())
-    })?;
+    let meta = SectionFrontMatter::parse(&front_matter)
+        .with_context(|| {
+            format!("Error when parsing front matter of section `{}`", file_path.to_string_lossy())
+        })?
+        .into_page_fm();
 
     Ok((meta, content))
 }
